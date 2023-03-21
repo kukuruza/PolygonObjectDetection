@@ -266,7 +266,8 @@ def train(hyp, opt, device, tb_writer=None, polygon=False):
                 dataset.indices = random.choices(range(dataset.n), weights=iw, k=dataset.n)  # rand weighted idx
             # Broadcast if DDP
             if rank != -1:
-                indices = (torch.tensor(dataset.indices) if rank == 0 else torch.zeros(dataset.n)).int()
+                indices = (torch.tensor(dataset.indices)
+                           if rank == 0 else torch.zeros(dataset.n)).int()
                 dist.broadcast(indices, 0)
                 if rank != 0:
                     dataset.indices = indices.cpu().numpy()
@@ -364,6 +365,7 @@ def train(hyp, opt, device, tb_writer=None, polygon=False):
                 results, maps, _ = test.test(data_dict,
                                              batch_size=batch_size * 2,
                                              imgsz=imgsz_test,
+                                             iou_thres=0.7,
                                              model=ema.ema,
                                              single_cls=single_cls,
                                              dataloader=testloader,
@@ -572,15 +574,15 @@ if __name__ == '__main__':
                 'hsv_h': (1, 0.0, 0.1),  # image HSV-Hue augmentation (fraction)
                 'hsv_s': (1, 0.0, 0.9),  # image HSV-Saturation augmentation (fraction)
                 'hsv_v': (1, 0.0, 0.9),  # image HSV-Value augmentation (fraction)
-                'degrees': (1, 0.0, 45.0),  # image rotation (+/- deg)
-                'translate': (1, 0.0, 0.9),  # image translation (+/- fraction)
+                'degrees': (1, 0.0, 10.0),  # image rotation (+/- deg)
+                'translate': (1, 0.0, 0.05),  # image translation (+/- fraction)
                 'scale': (1, 0.0, 0.9),  # image scale (+/- gain)
                 'shear': (1, 0.0, 10.0),  # image shear (+/- deg)
                 'perspective': (0, 0.0, 0.001),  # image perspective (+/- fraction), range 0-0.001
-                'flipud': (1, 0.0, 1.0),  # image flip up-down (probability)
-                'fliplr': (0, 0.0, 1.0),  # image flip left-right (probability)
-                'mosaic': (1, 0.0, 1.0),  # image mixup (probability)
-                'mixup': (1, 0.0, 1.0)}  # image mixup (probability)
+                'flipud': (0, 0.0, 0.0),  # image flip up-down (probability)
+                'fliplr': (0, 0.0, 0.0),  # image flip left-right (probability)
+                'mosaic': (0, 0.0, 0.0),  # image mixup (probability)
+                'mixup': (0, 0.0, 0.0)}  # image mixup (probability)
 
         assert opt.local_rank == -1, 'DDP mode not implemented for --evolve'
         opt.notest, opt.nosave = True, True  # only test/save final epoch

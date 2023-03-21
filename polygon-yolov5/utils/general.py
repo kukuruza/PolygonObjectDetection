@@ -42,7 +42,7 @@ except Exception as e:
     polygon_b_inter_union_cuda_enable = False
 
 # Settings
-torch.set_printoptions(linewidth=320, precision=5, profile='long')
+torch.set_printoptions(linewidth=200, precision=5, profile='long')
 np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format})  # format short g, %precision=5
 pd.options.display.max_columns = 10
 cv2.setNumThreads(0)  # prevent OpenCV from multithreading (incompatible with PyTorch DataLoader)
@@ -1060,8 +1060,8 @@ def polygon_non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, cla
 
         output[xi] = x[i]
         if (time.time() - t) > time_limit:
-            print(f'WARNING: NMS time limit {time_limit}s exceeded')
-            break  # time limit exceeded
+            logging.debug(f'NMS time limit {time_limit}s exceeded')
+            # break  # time limit exceeded
 
     return output
 

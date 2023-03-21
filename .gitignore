@@ -1,0 +1,8 @@
+__pycache__
+.vscode
+*.pt
+polygon-yolov5/utils/iou_cuda/build
+polygon-yolov5/utils/iou_cuda/dist
+polygon-yolov5/utils/iou_cuda/polygon_inter_union_cuda.egg-info
+polygon-yolov5/runs
+
