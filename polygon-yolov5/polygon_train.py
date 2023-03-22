@@ -101,8 +101,8 @@ def train(hyp, opt, device, tb_writer=None, polygon=False):
         model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
     with torch_distributed_zero_first(rank):
         check_dataset(data_dict)  # check
-    train_path = data_dict['train']
-    test_path = data_dict['val']
+    train_path = os.path.join(os.path.realpath(data_dict['path']), data_dict['train'])
+    test_path = os.path.join(os.path.realpath(data_dict['path']), data_dict['val'])
 
     # Freeze
     freeze = []  # parameter names to freeze (full or partial)
