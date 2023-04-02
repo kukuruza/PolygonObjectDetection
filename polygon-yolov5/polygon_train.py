@@ -241,6 +241,9 @@ def train(hyp, opt, device, tb_writer=None, polygon=False):
     model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
     model.names = names
 
+    with open(results_file, 'a') as f:
+        f.write('epoch mem dummy1 dummy2 dummy3 dummy4 dummy5 width mp mr mAP0.5 mAP@0.5:0.95 loss_box loss_obj loss_cls')
+
     # Start training
     t0 = time.time()
     nw = max(round(hyp['warmup_epochs'] * nb), 1000)  # number of warmup iterations, max(3 epochs, 1k iterations)
