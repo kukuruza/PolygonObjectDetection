@@ -1260,7 +1260,7 @@ class Polygon_LoadImagesAndLabels(Dataset):  # for training/testing
         self.path = path
         
         # albumentation
-        self.albumentations = Albumentations() if augment else None
+        self.albumentations = Albumentations(self.img_size) if augment else None
 
         try:
             f = []  # image files
@@ -1426,6 +1426,10 @@ class Polygon_LoadImagesAndLabels(Dataset):  # for training/testing
                 labels[:, 1:] = xyxyxyxyn2xyxyxyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
 
         if self.augment:
+            # albumentation (image color, and random crop).
+            # labels: unnormalized np.array([[class id, x1, y1, x2, y2, x3, y3, x4, y4], ...])
+            img, labels = self.albumentations(img, labels)
+
             # Augment imagespace
             if not mosaic:
                 img, labels = polygon_random_perspective(img, labels,
@@ -1445,9 +1449,6 @@ class Polygon_LoadImagesAndLabels(Dataset):  # for training/testing
             labels[:, 1::2] /= img.shape[1]  # normalized width 0-1
 
         if self.augment:
-            # albumentation
-            img = self.albumentations(img)
-            
             # flip up-down for all y
             if random.random() < hyp['flipud']:
                 img = np.flipud(img)
@@ -1645,10 +1646,27 @@ def polygon_verify_image_label(params):
         nc = 1
         logging.info(f'{prefix}WARNING: Ignoring corrupted image and/or label {im_file}: {e}')
         return [None] * 4 + [nm, nf, ne, nc]
-    
+
+
+def vis_keypoints(image, bboxes, keypoints, path):
+    color=(0, 255, 0)
+    diameter=15
+    thickness=5
+
+    image = image.copy()
+
+    for bbox in np.array(bboxes).astype(int):
+        image = cv2.rectangle(image, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, thickness)
+    for (x, y) in keypoints:
+        cv2.circle(image, (int(x), int(y)), diameter, color, -1)
+    cv2.imwrite(path, image)
+
+
 class Albumentations:
     # Polygon YOLOv5 Albumentations class (optional, only used if package is installed)
-    def __init__(self):
+    def __init__(self, size):
+        self.offset = 2  # Takes care of rounding problems when cropping.
+
         self.transform = None
         try:
             import albumentations as A
@@ -1658,17 +1676,57 @@ class Albumentations:
                 A.ToGray(p=0.1),
                 A.RandomBrightnessContrast(p=0.35),
                 A.CLAHE(p=0.2),
-                A.InvertImg(p=0.3)],)
+                A.BBoxSafeRandomCrop(p=1),
+                A.Resize(width=size, height=size, p=1),
+                ],
+                bbox_params=A.BboxParams(format="pascal_voc", label_fields=[]),
+                keypoint_params=A.KeypointParams(format='xy')
+                )
                 # Not support for any position change to image
 
             logging.info(colorstr('albumentations: ') + ', '.join(f'{x}' for x in self.transform.transforms if x.p))
         except ImportError:  # package not installed, skip
-            pass
+            assert False, 'Augmentation is needed.'
         except Exception as e:
             logging.info(colorstr('albumentations: ') + f'{e}')
 
-    def __call__(self, im, p=1.0):
+    def __call__(self, im, labels_orig, p=1.0):
+        labels = labels_orig
+        # Args:
+        #   labels: unnormalized np.array([[class id, x1, y1, x2, y2, x3, y3, x4, y4], ...])
         if self.transform and random.random() < p:
-            new = self.transform(image=im)  # transformed
+            im = np.pad(im, ((self.offset, self.offset), (self.offset, self.offset), (0, 0)))
+            labels += self.offset
+
+            if len(labels):
+                xs = labels[:, 1::2].flatten()
+                ys = labels[:, 2::2].flatten()
+                # Make one bounding box in Albumentation format from all the polygons.
+                bboxes = [(xs.min() - self.offset, ys.min() - self.offset, 
+                           xs.max() + self.offset, ys.max() + self.offset)]
+                keypoints = [(x[0], x[1]) for x in labels[:, 1:].reshape((-1, 2))]  # remove class.
+            else: 
+                bboxes = []
+                keypoints = []
+
+            # print ('keypoints size, keypoints', 
+            #        np.array(keypoints).size, keypoints) 
+            # vis_keypoints(im, bboxes, keypoints, '/jet/home/etoropov/test.jpg')
+
+            new = self.transform(image=im, bboxes=bboxes, keypoints=keypoints)
             im = new['image']
-        return im
+
+            # print ('new_keypoints size, new_keypoints', 
+            #        np.array(new['keypoints']).size, new['keypoints'])
+            # vis_keypoints(im, new['bboxes'], new['keypoints'], '/jet/home/etoropov/test_after.jpg')
+
+            assert np.array(keypoints).size == np.array(new['keypoints']).size, (
+                np.array(keypoints).size, np.array(new['keypoints']).size, 
+                bboxes, new['bboxes'],
+                keypoints, new['keypoints'])
+            
+            new_keypoints = np.array(new['keypoints']).reshape(labels[:, 1:].shape)
+            if len(labels):
+                labels = np.concatenate([labels[:, 0:1], new_keypoints], axis=1)
+
+        return im, labels
